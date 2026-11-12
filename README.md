@@ -5,7 +5,9 @@ A mobile-first interactive map prototype for US-34 through Big Thompson Canyon, 
 ## Current prototype
 - Dark MapLibre map using OpenFreeMap tiles.
 - Road route fetched at runtime from the public OSRM demo routing service.
-- Experimental left/right corner detection based on route geometry.
+- Experimental left/right corner detection based on route geometry, limited to the canyon stage.
+- Bidirectional stage view: switch between Loveland → Estes and Estes → Loveland; corner order and left/right labels are recalculated for the selected direction.
+- Canyon stage starts at the Dam Store pullout, snapped to the nearest point on the routed US-34 geometry. The current finish is the existing route endpoint.
 - Numbered corner markers and a touch-friendly roadbook list.
 - Tap a note or marker to zoom to that corner.
 - Toggle corner markers and route line.
@@ -21,7 +23,7 @@ A mobile-first interactive map prototype for US-34 through Big Thompson Canyon, 
 - Do not interact with the map while driving. Have a passenger operate it, or inspect the route while stopped.
 
 ## Next steps
-1. Verify that the returned route follows the intended US-34 canyon segment.
+1. Verify the exact canyon finish boundary and confirm that the returned route follows the intended US-34 segment.
 2. Improve corner detection using road curvature and radius rather than a single heading-change threshold.
 3. Add elevation-aware context and editable notes.
 4. Add a route editor and save validated routes.
