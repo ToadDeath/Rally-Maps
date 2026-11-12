@@ -17,7 +17,7 @@
 </head>
 <body>
 <div id="map" aria-label="Interactive US-34 canyon map"></div>
-<header class="top"><div class="brand"><div class="eyebrow">CANYON NOTES · STAGE 001</div><b>BIG THOMPSON CANYON</b><small>KING'S CORNER CIRCLE K → ESTES PARK ELEMENTARY</small></div><div class="status"><span class="dot"></span><span id="status">LOADING</span></div></header>
+<header class="top"><div class="brand"><div class="eyebrow">CANYON NOTES · STAGE 001</div><b>BIG THOMPSON CANYON</b><small>CIRCLE K · 1040 S LINCOLN → ESTES PARK ELEMENTARY</small></div><div class="status"><span class="dot"></span><span id="status">LOADING</span></div></header>
 <div class="actions"><button class="zoom" id="plus" aria-label="Zoom in">+</button><button class="zoom" id="minus" aria-label="Zoom out">−</button><button id="locate">◎ Locate</button><button id="fit">Fit route</button></div>
 <section class="sheet"><div class="handle"></div><div class="sheethead"><div><b>ROADBOOK <span id="count">· loading</span></b><div class="sub" id="summary">Fetching US-34 road geometry…</div></div><div class="pill">AUTO NOTES · PREVIEW</div></div><div class="tools"><button class="active" id="markers">Corner markers: ON</button><button class="active" id="line">Route line: ON</button><button id="direction">Direction: Loveland → Estes</button></div><div class="notes" id="notes"><div class="empty">Loading the canyon road. Notes are experimental geometry estimates, not verified driving instructions.</div></div></section>
 <script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
@@ -103,7 +103,7 @@ function detect(points){
 }
 function nearestRouteIndex(target){let best=Infinity,index=0;coords.forEach((p,i)=>{let d=dist(p,target);if(d<best){best=d;index=i}});return{index,distance:best}}
 function routeLength(points){let n=0;for(let i=1;i<points.length;i++)n+=dist(points[i-1],points[i]);return n}
-function applyDirection(){let points=direction==="forward"?stageCoords:[...stageCoords].reverse();corners=detect(points);selected=0;renderPins();renderNotes();$("direction").textContent="Direction: "+(direction==="forward"?"Loveland → Estes":"Estes → Loveland");$("summary").textContent=fmt(routeLength(points))+" canyon section · "+(direction==="forward"?"east to west":"west to east")}
+function applyDirection(){let points=direction==="forward"?stageCoords:[...stageCoords].reverse();corners=detect(points);selected=0;renderPins();renderNotes();$("direction").textContent="Direction: "+(direction==="forward"?"Loveland → Estes":"Estes → Loveland");$("summary").textContent=fmt(routeLength(points))+" canyon section · "+(direction==="forward"?"toward Estes Park":"toward Loveland")}
 function renderPins(){pins.forEach(p=>p.remove());pins=[];if(!showPins)return;corners.forEach(c=>{let el=document.createElement("div");el.className="pin sev"+c.severity;el.innerHTML="<span>"+c.severity+"</span>";el.title=c.direction+" "+c.severity;el.addEventListener("click",()=>select(c.id,true));pins.push(new maplibregl.Marker({element:el}).setLngLat(c.coordinate).addTo(map))})}
 function renderNotes(){
   $("count").textContent="· "+corners.length+" corners";
