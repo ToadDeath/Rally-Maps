@@ -34,14 +34,95 @@ function bearing(a,b){let r=Math.PI/180,p=a[1]*r,q=b[1]*r,l=(b[0]-a[0])*r;return
 function angle(a){return((a+540)%360)-180}
 function at(points,cum,d){let lo=0,hi=cum.length-1;while(lo<hi){let m=(lo+hi)>>1;if(cum[m]<d)lo=m+1;else hi=m}let i=Math.max(1,lo),t=(d-cum[i-1])/(cum[i]-cum[i-1]||1);return[points[i-1][0]+(points[i][0]-points[i-1][0])*t,points[i-1][1]+(points[i][1]-points[i-1][1])*t]}
 function fmt(m){return m<1000?Math.round(m/10)*10+" m":(m/1000).toFixed(1)+" km"}
-function severity(a){return a>=115?1:a>=85?2:a>=60?3:a>=42?4:a>=28?5:6}
-function detect(points){let cum=[0];for(let i=1;i<points.length;i++)cum.push(cum[i-1]+dist(points[i-1],points[i]));let found=[];const windows=[45,85];for(let d=90;d<cum.at(-1)-90;d+=12){let p=at(points,cum,d),best={magnitude:0,delta:0};for(const w of windows){let before=at(points,cum,d-w),after=at(points,cum,d+w),delta=angle(bearing(p,after)-bearing(before,p)),magnitude=Math.abs(delta);if(magnitude>best.magnitude)best={magnitude,delta}}if(best.magnitude>=16){let prev=found.at(-1),same=prev&&Math.sign(prev.delta)===Math.sign(best.delta);if(same&&d-prev.distance<75){if(best.magnitude>prev.magnitude)Object.assign(prev,{distance:d,delta:best.delta,magnitude:best.magnitude,coordinate:p})}else found.push({distance:d,delta:best.delta,magnitude:best.magnitude,coordinate:p})}}return found.map((c,i)=>({...c,id:i+1,severity:severity(c.magnitude),direction:c.delta>0?"RIGHT":"LEFT"}))}
+function noteDistance(m){
+  if(m==null||m<40)return "";
+  let n=Math.round(m/10)*10;
+  if(n<100)n=Math.max(40,Math.round(n/20)*20);
+  else if(n%20===0)n+=m>=n?10:-10;
+  return n+" m";
+}
+function severity(radius){
+  return radius<32?1:radius<55?2:radius<85?3:radius<130?4:radius<200?5:6;
+}
+function detect(points){
+  const step=5,cum=[0];
+  for(let i=1;i<points.length;i++)cum.push(cum[i-1]+dist(points[i-1],points[i]));
+  const total=cum.at(-1),samples=[];
+  for(let d=0;d<=total;d+=step){
+    const p=at(points,cum,d),before=at(points,cum,Math.max(0,d-25)),after=at(points,cum,Math.min(total,d+25));
+    const delta=angle(bearing(p,after)-bearing(before,p));
+    samples.push({d,delta,rate:Math.abs(delta)/Math.max(1,Math.min(total,d+25)-Math.max(0,d-25))});
+  }
+  const threshold=0.075,active=samples.map(x=>x.rate>=threshold);
+  // Bridge brief geometry noise, but keep distinct opposite-direction corners separate.
+  for(let i=1;i<active.length-1;i++){
+    if(!active[i]&&active[i-1]&&active[i+1]&&Math.sign(samples[i-1].delta)===Math.sign(samples[i+1].delta))active[i]=true;
+  }
+  const runs=[];let run=null;
+  for(let i=0;i<samples.length;i++){
+    const sign=Math.sign(samples[i].delta);
+    if(active[i]&&sign){
+      if(!run||run.sign!==sign||samples[i].d-run.lastD>25){
+        if(run)runs.push(run);
+        run={sign,start:samples[i].d,end:samples[i].d,lastD:samples[i].d};
+      }else{run.end=samples[i].d;run.lastD=samples[i].d}
+    }else if(run&&samples[i].d-run.lastD>25){runs.push(run);run=null}
+  }
+  if(run)runs.push(run);
+  const candidates=[];
+  for(const r of runs){
+    const start=Math.max(0,r.start-15),end=Math.min(total,r.end+15),length=end-start;
+    if(length<25)continue;
+    const before=at(points,cum,Math.max(0,start-20)),after=at(points,cum,Math.min(total,end+20));
+    const middle=at(points,cum,(start+end)/2);
+    const turn=angle(bearing(middle,after)-bearing(before,middle));
+    if(Math.abs(turn)<12||Math.sign(turn)!==r.sign)continue;
+    const radius=length/(Math.abs(turn)*Math.PI/180);
+    candidates.push({start,end,length,turn,radius,coordinate:at(points,cum,(start+end)/2),direction:turn>0?"RIGHT":"LEFT"});
+  }
+  // Merge adjacent same-direction fragments caused by small changes in curvature.
+  const merged=[];
+  for(const c of candidates){
+    const p=merged.at(-1);
+    if(p&&p.direction===c.direction&&c.start-p.end<45){
+      p.end=c.end;p.length=p.end-p.start;
+      const before=at(points,cum,Math.max(0,p.start-20)),after=at(points,cum,Math.min(total,p.end+20)),mid=at(points,cum,(p.start+p.end)/2);
+      p.turn=angle(bearing(mid,after)-bearing(before,mid));
+      p.radius=p.length/(Math.max(1,Math.abs(p.turn))*Math.PI/180);
+      p.coordinate=mid;
+    }else merged.push({...c});
+  }
+  const corners=merged.map((c,i)=>({...c,id:i+1,severity:severity(c.radius)}));
+  corners.forEach((c,i)=>{
+    const next=corners[i+1];
+    c.gapAfter=next?Math.max(0,next.start-c.end):null;
+    c.next=next||null;
+    c.conjunction=next?(c.gapAfter<20||next.severity<c.severity?"INTO":"AND"):null;
+  });
+  return corners;
+}
 function nearestRouteIndex(target){let best=Infinity,index=0;coords.forEach((p,i)=>{let d=dist(p,target);if(d<best){best=d;index=i}});return{index,distance:best}}
 function routeLength(points){let n=0;for(let i=1;i<points.length;i++)n+=dist(points[i-1],points[i]);return n}
 function applyDirection(){let points=direction==="forward"?stageCoords:[...stageCoords].reverse();corners=detect(points);selected=0;renderPins();renderNotes();$("direction").textContent="Direction: "+(direction==="forward"?"Loveland → Estes":"Estes → Loveland");$("summary").textContent=fmt(routeLength(points))+" canyon section · "+(direction==="forward"?"east to west":"west to east")}
 function renderPins(){pins.forEach(p=>p.remove());pins=[];if(!showPins)return;corners.forEach(c=>{let el=document.createElement("div");el.className="pin sev"+c.severity;el.innerHTML="<span>"+c.severity+"</span>";el.title=c.direction+" "+c.severity;el.addEventListener("click",()=>select(c.id,true));pins.push(new maplibregl.Marker({element:el}).setLngLat(c.coordinate).addTo(map))})}
-function renderNotes(){$("count").textContent="· "+corners.length+" detected";$("notes").innerHTML=corners.map(c=>'<button class="note '+(selected===c.id?"selected":"")+'" data-id="'+c.id+'"><span class="num" style="background:'+(c.severity<=2?"#f06b62":c.severity<=4?"#f2b84b":"#62c9a0")+'">'+c.severity+'</span><span><span class="label">'+c.direction+" "+c.severity+'</span><div class="detail">Geometry estimate · corner '+c.id+'</div></span><span class="dist">'+fmt(c.distance)+'</span></button>').join("");$("notes").querySelectorAll(".note").forEach(el=>el.onclick=()=>select(+el.dataset.id,true))}
-function select(id,fly){selected=id;let c=corners.find(x=>x.id===id);renderNotes();if(fly&&c){map.flyTo({center:c.coordinate,zoom:Math.max(13,map.getZoom()),speed:.9});new maplibregl.Popup({offset:17}).setLngLat(c.coordinate).setHTML('<div class="pop-title">'+c.direction+" "+c.severity+'</div><div class="pop-sub">Corner '+c.id+" · "+fmt(c.distance)+' from stage start<br>Estimated from road geometry only.</div>').addTo(map)}}
+function renderNotes(){
+  $("count").textContent="· "+corners.length+" corners";
+  $("notes").innerHTML=corners.map(c=>{
+    const nextCall=c.next?(c.conjunction+" "+c.next.severity+" "+c.next.direction):"END OF NOTES";
+    const distance=noteDistance(c.gapAfter);
+    return '<button class="note '+(selected===c.id?"selected":"")+'" data-id="'+c.id+'"><span class="num" style="background:'+(c.severity<=2?"#f06b62":c.severity<=4?"#f2b84b":"#62c9a0")+'">'+c.severity+'</span><span><span class="label">'+c.severity+" "+c.direction+'</span><div class="detail">'+nextCall+'</div></span><span class="dist">'+distance+'</span></button>';
+  }).join("");
+  $("notes").querySelectorAll(".note").forEach(el=>el.onclick=()=>select(+el.dataset.id,true));
+}
+function select(id,fly){
+  selected=id;let c=corners.find(x=>x.id===id);renderNotes();
+  if(fly&&c){
+    map.flyTo({center:c.coordinate,zoom:Math.max(13,map.getZoom()),speed:.9});
+    const next=c.next?c.conjunction+" "+c.next.severity+" "+c.next.direction:"End of notes";
+    const gap=c.gapAfter==null?"":noteDistance(c.gapAfter)+" to next corner";
+    new maplibregl.Popup({offset:17}).setLngLat(c.coordinate).setHTML('<div class="pop-title">'+c.severity+" "+c.direction+'</div><div class="pop-sub">'+next+(gap?" · "+gap:"")+'<br>Estimated from road geometry only.</div>').addTo(map)
+  }
+}
 function fit(){if(bounds)map.fitBounds(bounds,{padding:{top:105,bottom:250,left:30,right:30},duration:650})}
 async function load(){try{status.textContent="LOADING ROUTE";let url="https://router.project-osrm.org/route/v1/driving/"+A.join(",")+";"+B.join(",")+"?overview=full&geometries=geojson";let res=await fetch(url);if(!res.ok)throw Error("Routing service returned "+res.status);let data=await res.json();if(data.code!=="Ok"||!data.routes?.length)throw Error("No route returned");coords=data.routes[0].geometry.coordinates;let feature={type:"Feature",properties:{name:"US-34 Big Thompson Canyon"},geometry:{type:"LineString",coordinates:coords}};map.addSource("route",{type:"geojson",data:feature});map.addLayer({id:"route-casing",type:"line",source:"route",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#08121b","line-width":["interpolate",["linear"],["zoom"],8,7,14,12]}});map.addLayer({id:"route-line",type:"line",source:"route",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#f2b84b","line-width":["interpolate",["linear"],["zoom"],8,3,14,6]}});bounds=new maplibregl.LngLatBounds(coords[0],coords[0]);coords.forEach(p=>bounds.extend(p));let start=nearestRouteIndex(CANYON_START),finish=nearestRouteIndex(CANYON_END);if(start.distance>1200)throw Error("Dam Store boundary did not snap close to the current route ("+Math.round(start.distance)+" m away).");if(finish.distance>1800)throw Error("Canyon exit boundary did not snap close to the current route ("+Math.round(finish.distance)+" m away).");if(finish.index<=start.index)throw Error("Canyon boundaries are out of order on the route.");stageCoords=coords.slice(start.index,finish.index+1);if(stageCoords.length<10)throw Error("Canyon section is too short to analyze.");applyDirection();status.textContent="ROUTE READY";fit();}catch(e){console.error(e);status.textContent="ROUTE UNAVAILABLE";$("summary").textContent="Could not retrieve route";$("notes").innerHTML='<div class="empty">Could not load route geometry. Refresh when connected.<br>'+e.message+'</div>'}}
 map.on("load",load);$("plus").onclick=()=>map.zoomIn();$("minus").onclick=()=>map.zoomOut();$("fit").onclick=fit;
