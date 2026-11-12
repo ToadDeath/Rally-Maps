@@ -24,7 +24,7 @@
 <section class="sheet"><div class="handle"></div><div class="sheethead"><div><b>ROADBOOK <span id="count">· loading</span></b><div class="sub" id="summary">Fetching US-34 road geometry…</div></div><div class="pill">AUTO NOTES · PREVIEW</div></div><div class="tools"><button class="active" id="markers">Corner markers: ON</button><button class="active" id="line">Route line: ON</button><button id="direction">Direction: Loveland → Estes</button></div><div class="notes" id="notes"><div class="empty">Loading the canyon road. Notes are experimental geometry estimates, not verified driving instructions.</div></div></section>
 <script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
 <script>
-const A=[-105.1019,40.3978],B=[-105.5217,40.3772];
+const A=[-105.1019,40.3978],B=[-105.5247,40.3748]; // King's Corner Circle K to Estes Park Elementary, approximate school-campus pin.
 const CANYON_START=[-105.2268,40.42183]; // Callouts begin by The Dam Store, not at the route start.
 const CANYON_END=[-105.5000,40.3750]; // Approximate east-side canyon exit; callouts stop before the route continues into Estes Park.
 const map=new maplibregl.Map({container:"map",style:"https://tiles.openfreemap.org/styles/dark",center:[-105.31,40.39],zoom:10.2,attributionControl:true});
